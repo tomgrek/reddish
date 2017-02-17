@@ -1,0 +1,17 @@
+articles - sorted set (zadd articles 1231312055 article_id) / zrangebyscore articles date1 date2 limit offset container
+/ zrange articles 0 -1
+
+articles.titles.index - hashset (hset articles:titles "article title" article_id)
+hscan articles:titles 0 match "article tit*"
+
+// not this, this isn't necessary.
+// articles:article_id - hashset (hset articles:article_id title
+
+articles:titles:article_id "article title"
+
+articles.titles.index "article title" article_id
+if the title changes: del articles.titles.index "article title"
+                      hset articles.titles.index "new title" article_id
+
+articles:tags:article_id - list (lrange articles:tags:article_id 0 -1)
+articles:tags:tag1 - list (rpush articles:tags:tag1 article_id)

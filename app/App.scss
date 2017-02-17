@@ -1,0 +1,42 @@
+/* This is a CSS reset */
+* {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  vertical-align: baseline;
+  background: transparent;
+  text-decoration: none;
+}
+html {
+  font-size: 16px;
+  overflow: hidden;
+}
+body {
+  width: 100%;
+}
+.app {
+  width: 100%;
+  height: 100%;
+}
+/* This is a little bit of SASS */
+$softWhite: #fefdfd;
+$softBlack: #444;
+
+.successBox {
+  background-color: $softWhite;
+  margin: 0;
+  border: 2px dashed $softBlack;
+  max-height: 6em;
+  position: relative;
+  top: 10%;
+  width: 90%;
+  left: 5%;
+  font-family: sans-serif;
+  text-align: center;
+  line-height: 6em;
+  font-size: 2em;
+  color: $softBlack;
+  -webkit-user-select: none;
+  cursor: default;
+}
