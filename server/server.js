@@ -142,13 +142,18 @@ function main() {
 
       socket.on('fetchNLinked', query => {
         query = JSON.parse(query);
+        console.log(query);
         let promises = [];
         fetchN(query).then(res => {
           for (let i = 0; i < res.length; i += 2) {
             promises.push(fetchLinked({base: query.base, id: res[i], fields: query.fields, score: res[i+1]}));
           }
           Promise.all(promises).then(result => {
-            socket.emit('results', result);
+            socket.emit('results', {
+              result: result,
+              query: query,
+              timeStamp: new Date()
+            });
             let subs = [];
             for (var i = 0; i < query.fields.length; i++) {
               for (var j = 0; j < res.length; j++) {
@@ -170,12 +175,12 @@ function main() {
                         let id = splitKey[splitKey.length - 1];
                         let field = splitKey[splitKey.length - 2];
                         fetchLinked({base: activeQuery.base, id: id, fields: activeQuery.fields}).then(v => {
-                          listeningSocket.emit('newresult', JSON.stringify({
+                          listeningSocket.emit('newresult', {
                             results: v,
                             query: activeQuery,
                             field: field,
                             timeStamp: new Date()
-                          }));
+                          });
                         });
                       } else {
                         fetchN(activeQuery).then(res => {
@@ -213,11 +218,20 @@ function main() {
                 let keyName = b.split(':').slice(1);
                 let field = setUnion(keyName, query.fields);
                 redisdb.get(keyName.join(':'), (err, d) => {
-                  socket.emit('newresult', JSON.stringify({results: d, query: query, field: field, timeStamp: new Date()}));
+                  socket.emit('newresult', {
+                    results: d,
+                    query: query,
+                    field: field,
+                    timeStamp: new Date()
+                  });
                 });
               } else {
                 fetchLinked(query).then(d => {
-                  socket.emit('newresult', JSON.stringify({results: d, query: query, timeStamp: new Date()}));
+                  socket.emit('newresult', {
+                    results: d,
+                    query: query,
+                    timeStamp: new Date()
+                  });
                 });
               }
             });
@@ -229,13 +243,8 @@ function main() {
       // STILL TODO:
       // find and fetch (query keys articles.titles, then return fetched id)
       // insert (done!), update, delete
-      // NEXT: better keep some client side representation of the results,
-      // to handle newresult without crashing react, etc.
-      // ALSO: if there's already a redis listener on the keychange event,
-      // add the current socket (new client requesting same listener) to a
-      // hashmap, and use the existing listener to notify all sockets inside
-      // that hashmap. Rather than adding a new listener. Then performance
-      // should be pretty tip-top.
+      // NEXT: integrate preact, modularize server side code, have server create
+      // db schema with specified fields if it doesn't already exist.
       socket.on('insert', query => {
         query = JSON.parse(query);
         //if (socket.request.user && !socket.request.user.logged_in) return;

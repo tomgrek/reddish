@@ -9,13 +9,6 @@ var Browser = require('zombie');
 var DEV_SERVER = 'localhost:3000';
 Browser.localhost('localhost', 3000);
 
-var mulFunc = require('../functions/multiply.js').multiply;
-
-// TEST SOME BACK-END FUNCTIONS DIRECTLY
-it('should return 9x10 = 90', function() {
-  mulFunc(9,10).should.equal(90);
-});
-
 // TEST SOME API CALLS
 it('should successfully serve something', function(done) {
   chai.request(DEV_SERVER)
@@ -44,7 +37,7 @@ describe('Visit home page', function() {
     done();
   });
   it('should load the page with the correct title', function(done) {
-    browser.assert.text('title', 'Bootcamp Skeleton');
+    browser.assert.text('title', 'Reddish');
     done();
   });
 });

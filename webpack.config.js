@@ -15,6 +15,12 @@ module.exports = {
     filename: '[name].js',
     publicPath: '/'
   },
+  resolve: {
+    alias: {
+      'react': 'preact-compat',
+      'react-dom': 'preact-compat'
+    }
+  },
   plugins: [
     new HtmlWebpackPlugin({
       template: 'app/index.tpl.html',
@@ -30,12 +36,9 @@ module.exports = {
   ],
   module: {
     loaders: [{
-      test: /\.jsx?$/,
+      test: /\.(js|jsx)$/,
       exclude: /node_modules/,
-      loader: 'babel',
-      query: {
-        "presets": ["react", "es2015", "stage-0", "react-hmre"]
-      }
+      loader: 'babel-loader'
     }, {
       test: /\.json?$/,
       loader: 'json'
