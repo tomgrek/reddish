@@ -31,7 +31,7 @@ it('should return "hello " + whatever is passed in, over http', function(done) {
 // TEST THE FRONT END
 describe('Visit home page', function() {
   var browser = new Browser();
-  before(function() { return browser.visit('/'); });
+  before(function(done) { browser.visit('http://localhost:3000', done); });
   it('should serve a page', function(done) {
     browser.assert.success();
     done();

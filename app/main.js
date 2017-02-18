@@ -6,6 +6,4 @@ let socket = IO.connect('http://localhost:3000');
 
 render(<App socket={socket}/>, document.getElementById('root'));
 
-if (module.hot) {
-  require('preact/devtools');
-}
+require('preact/devtools');
