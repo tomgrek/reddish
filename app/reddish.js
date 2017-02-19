@@ -6,10 +6,24 @@ export default class Reddish {
     this._cache = [];
     this._linkedComponent = 0;
   }
+  insertWithScore(newItem) {
+    let insertPoint = -1;
+    for (let i = 0; i < this._cache.length; i++) {
+      if (this._cache[i].score > newItem.score) {
+        insertPoint = i;
+        break;
+      }
+    }
+    if (insertPoint === -1) {
+      this._cache.push(newItem);
+    } else {
+      this._cache = this._cache.slice(0, insertPoint).concat(newItem).concat(this._cache.slice(insertPoint));
+    }
+  }
   link(component, fields, stateDataItemName, minScore = 0, maxScore = '+inf', offset = 0, count = -1) {
     this.ready = false;
     this._linkedComponent = component; // save ref to component for insert etc.
-    this.socket.emit('fetchNLinked', JSON.stringify({
+    this.socket.emit('fetchNLinked', {
       base: this.baseSchemaName,
       fields: fields,
       min: minScore,
@@ -18,23 +32,12 @@ export default class Reddish {
       count: count,
       dontSendWholeSetOnUpdate: true,
       queryId: this.uniqueQueryId
-    }));
+    });
     this.socket.on('newresult', (result) => {
       if (result.query.base !== this.baseSchemaName) return;
       if (result.query.queryId !== this.uniqueQueryId) return;
       if (result.query.operation === 'insert') {
-        let insertPoint = -1;
-        for (let i = 0; i < this._cache.length; i++) {
-          if (this._cache[i].score > result.results.score) {
-            insertPoint = i;
-            break;
-          }
-        }
-        if (insertPoint === -1) {
-          this._cache.push(result.results);
-        } else {
-          this._cache = this._cache.slice(0, insertPoint).concat(result.results).concat(this._cache.slice(insertPoint));
-        }
+        insertWithScore(result.results);
       } else {
         this._cache.map(item => {
           if (item.id === result.results.id) {

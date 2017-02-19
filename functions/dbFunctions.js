@@ -36,13 +36,7 @@ const findOne = function(query, db) {
   });
 }
 
-const setUnion = function(a, b) {
-  y = new Set(b);
-  return [...new Set(a.filter(v => y.has(v)))][0];
-};
-
 module.exports = {
   fetchLinked: fetchLinked,
-  findOne: findOne,
-  setUnion: setUnion
+  findOne: findOne
 };

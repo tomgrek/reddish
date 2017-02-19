@@ -1,12 +1,49 @@
 (function() {
   const redis = require("redis");
   const uuidv1 = require('uuid/v1');
+  const _ = require('lodash');
 
   let io; // user must call initSocket
 
   const redisdb = redis.createClient(); // for pubsubs
   const redisEngine = redis.createClient(); // for queries
   let listeners = {};
+  let subscriptions = [];
+
+  const listenerFunction = (a,b,c) => {
+    let key = b.slice(15);
+    for (let i = 0; i < listeners[key].sockets.length; i++) {
+      let activeQuery = listeners[key].queries[i];
+      let listeningSocket = listeners[key].sockets[i];
+      if (activeQuery.dontSendWholeSetOnUpdate) {
+        let splitKey = b.split(':');
+        let id = splitKey[splitKey.length - 1];
+        let field = splitKey[splitKey.length - 2];
+        fetchLinked({base: activeQuery.base, id: id, fields: activeQuery.fields}).then(v => {
+          listeningSocket.emit('newresult', {
+            results: v,
+            query: activeQuery,
+            field: field,
+            timeStamp: new Date()
+          });
+        });
+      } else {
+        fetchN(activeQuery).then(res => {
+          let promises = [];
+          for (let i = 0; i < res.length; i += 2) {
+            promises.push(fetchLinked({base: activeQuery.base, id: res[i], fields: activeQuery.fields, score: res[i+1]}));
+          }
+          Promise.all(promises).then(result => {
+            listeningSocket.emit('newresult', {
+              results: result,
+              query: activeQuery,
+              timeStamp: new Date()
+            });
+          });
+        });
+      }
+    }
+  };
 
   const fetchN = function({base, min, max, offset, count}) {
     return new Promise((resolve, reject) => {
@@ -39,30 +76,27 @@
     });
   };
 
-  const setUnion = require('./dbFunctions.js').setUnion;
-
   const initSocket = function(ioInstance) {
     io = ioInstance;
 
     io.on('connection', (socket) => {
       socket.on('disconnect', () => {
-        for (listenerKey of Object.keys(this.listeners)) {
+        for (listenerKey of Object.keys(listeners)) {
           // kill dead listener sockets when client disconnects
           let newSockets = [];
           let newQueries = [];
-          for (let i = 0; i < this.listeners[listenerKey].sockets.length; i++) {
-            if (this.listeners[listenerKey].sockets[i].id !== socket.id) {
-              newSockets.push(this.listeners[listenerKey].sockets[i]);
-              newQueries.push(this.listeners[listenerKey].queries[i]);
+          for (let i = 0; i < listeners[listenerKey].sockets.length; i++) {
+            if (listeners[listenerKey].sockets[i].id !== socket.id) {
+              newSockets.push(listeners[listenerKey].sockets[i]);
+              newQueries.push(listeners[listenerKey].queries[i]);
             }
           }
-          this.listeners[listenerKey].sockets = newSockets;
-          this.listeners[listenerKey].queries = newQueries;
+          listeners[listenerKey].sockets = newSockets;
+          listeners[listenerKey].queries = newQueries;
         }
       });
 
       socket.on('fetchNLinked', query => {
-        query = JSON.parse(query);
         let promises = [];
         fetchN(query).then(res => {
           for (let i = 0; i < res.length; i += 2) {
@@ -74,59 +108,28 @@
               query: query,
               timeStamp: new Date()
             });
-            let subs = [];
             for (var i = 0; i < query.fields.length; i++) {
               for (var j = 0; j < res.length; j++) {
                 let key = query.base + ':' + query.fields[i] + ':' + result[j].id;
-                subs[key] = redisdb;
-                if (this.listeners[key]) {
-                  this.listeners[key].sockets.push(socket);
-                  this.listeners[key].queries.push(query);
+                if (listeners[key]) {
+                  listeners[key].sockets.push(socket);
+                  listeners[key].queries.push(query);
                 } else {
-                  subs[key].psubscribe("__keyspace@0__:" + key);
-                  this.listeners[key] = {db: subs[key], sockets: [socket], queries: [query]};
-                  this.listeners[key].db.on('pmessage',(a,b,c) => {
-                    if (b.slice(15) !== key) return;
-                    for (let i = 0; i < this.listeners[key].sockets.length; i++) {
-                      let activeQuery = this.listeners[key].queries[i];
-                      let listeningSocket = this.listeners[key].sockets[i];
-                      if (activeQuery.dontSendWholeSetOnUpdate) {
-                        let splitKey = b.split(':');
-                        let id = splitKey[splitKey.length - 1];
-                        let field = splitKey[splitKey.length - 2];
-                        fetchLinked({base: activeQuery.base, id: id, fields: activeQuery.fields}).then(v => {
-                          listeningSocket.emit('newresult', {
-                            results: v,
-                            query: activeQuery,
-                            field: field,
-                            timeStamp: new Date()
-                          });
-                        });
-                      } else {
-                        fetchN(activeQuery).then(res => {
-                          let promises = [];
-                          for (let i = 0; i < res.length; i += 2) {
-                            promises.push(fetchLinked({base: activeQuery.base, id: res[i], fields: activeQuery.fields, score: res[i+1]}));
-                          }
-                          Promise.all(promises).then(result => {
-                            listeningSocket.emit('newresult', {
-                              results: result,
-                              query: activeQuery,
-                              timeStamp: new Date()
-                            });
-                          });
-                        });
-                      }
-                    }
-                  });
+                  redisdb.psubscribe("__keyspace@0__:" + query.base + "*");// + key);
+                  listeners[key] = {sockets: [socket], queries: [query]};
+
+                  if (_.find(subscriptions, (v) => v === query.base) === undefined) {
+                    redisdb.on('pmessage', listenerFunction);
+                    subscriptions.push(query.base);
+                  }
                 }
               }
             }
           });
         });
       });
+      // this just gets a single item
       socket.on('fetchLinked', query => {
-        query = JSON.parse(query);
         fetchLinked(query).then(res => {
           socket.emit('results', JSON.stringify({results: res, query: query, timeStamp: new Date()}));
           let subs = [];
@@ -136,7 +139,7 @@
             subs[key].on('pmessage',(a,b,c) => {
               if (query.dontSendWholeSetOnUpdate) {
                 let keyName = b.split(':').slice(1);
-                let field = setUnion(keyName, query.fields);
+                let field = _.intersection(keyName, query.fields)[0];
                 redisdb.get(keyName.join(':'), (err, d) => {
                   socket.emit('newresult', {
                     results: d,
@@ -163,7 +166,7 @@
       // STILL TODO:
       // find and fetch (query keys articles.titles, then return fetched id)
       // insert (done!), update, delete
-      // NEXT: integrate preact, modularize server side code, have server create
+      // NEXT: have server create
       // db schema with specified fields if it doesn't already exist.
       socket.on('insert', query => {
         //if (socket.request.user && !socket.request.user.logged_in) return;
