@@ -1,5 +1,7 @@
 (function() {
   const redis = require("redis");
+  const uuidv1 = require('uuid/v1');
+
   let io; // user must call initSocket
 
   const redisdb = redis.createClient(); // for pubsubs
@@ -64,7 +66,7 @@
         let promises = [];
         fetchN(query).then(res => {
           for (let i = 0; i < res.length; i += 2) {
-            promises.push(fetchLinked({base: query.base, id: res[i], fields: query.fields, score: res[i+1]}));
+            promises.push(fetchLinked({base: query.base, id: res[i], fields: query.fields, score: Number.parseInt(res[i+1])}));
           }
           Promise.all(promises).then(result => {
             socket.emit('results', {
@@ -164,25 +166,27 @@
       // NEXT: integrate preact, modularize server side code, have server create
       // db schema with specified fields if it doesn't already exist.
       socket.on('insert', query => {
-        query = JSON.parse(query);
         //if (socket.request.user && !socket.request.user.logged_in) return;
         let fields = Object.keys(query.item);
-        if (query.item.id) {
-          redisEngine.zadd([query.base, query.item.rank, query.item.id], console.log);
-          for (var field of fields) {
-            if (field === 'id') continue;
-            redisEngine.set(query.base + ':' + field + ':' + query.item.id, JSON.stringify(query.item[field]));
-            redisEngine.hset(query.base + '.' + field + '.index', JSON.stringify(query.item[field]), query.item.id);
-          }
-          query.id = query.item.id;
-          query.fields = fields;
-          query.score = query.item.rank;
-          query.operation = 'insert';
-          delete query.item;
-          fetchLinked(query).then(res => {
-            socket.emit('newresult', JSON.stringify({results: res, query: query, timeStamp: new Date()}));
-          });
+        if (query.item.id === undefined || query.item.id === null) {
+          // nice looking id but not guaranteed unique
+          //query.item.id = (new Date()).getTime().toString(36);
+          query.item.id = uuidv1();
         }
+        redisEngine.zadd([query.base, query.item.score, query.item.id], console.log);
+        for (var field of fields) {
+          if (field === 'id') continue;
+          redisEngine.set(query.base + ':' + field + ':' + query.item.id, JSON.stringify(query.item[field]));
+          redisEngine.hset(query.base + '.' + field + '.index', JSON.stringify(query.item[field]), query.item.id);
+        }
+        query.id = query.item.id;
+        query.fields = fields;
+        query.score = Number.parseInt(query.item.score);
+        query.operation = 'insert';
+        delete query.item;
+        fetchLinked(query).then(res => {
+          socket.emit('newresult', {results: res, query: query, timeStamp: new Date()});
+        });
       });
 
       socket.on('find', query => {

@@ -11,63 +11,15 @@ export default class App extends Component {
     super(props);
   }
   componentDidMount() {
-    // this.props.socket.on('results', (results) => {
-    //   console.log(results);
-    //   if (results === null) return;
-    //   //let arr = [];
-    //   // for (let res of Object.keys(results)) {
-    //   //   arr.push(JSON.parse(results[res]));
-    //   // }
-    //   this.setState({data:results});
-    // });
     this.state.todosList.link(this, ['titles', 'tags'], 'data');
-
-    // this.props.socket.on('newresult', (result) => {
-    //   console.log('new result', result);
-    //   // let results = this.state.data;
-    //   // results.push(result);
-    //   // this.setState({data:results});
-    //   let arr = [];
-    //   // for (let res of Object.keys(result)) {
-    //   //   arr.push(JSON.parse(result[res]));
-    //   // }
-    //   this.setState({data:result.results});
-    // });
-    // query = {base:'articles', id:'1', fields:['titles', 'tags'], min: 0, max: '+inf', offset: 1, count: '2'}
-
+    // setTimeout(()=> {
+    //   this.state.todosList.insert({
+    //     titles: 'Todo item 5',
+    //     tags: ['mumbo', '2']
+    //   }, 106);
+    // }, 3000);
     //setTimeout(()=>this.props.socket.emit('find', "demo:data"),2000);
     //this.props.socket.emit('find', "articles");
-    // this.props.socket.emit('fetchLinked', JSON.stringify({
-    //   base: 'articles',
-    //   id: 1,
-    //   fields: ['titles', 'tags'],
-    //   queryId: 123, // put there by us, it'll be returned to us to id the query quickly
-    //   dontSendWholeSetOnUpdate: true
-    // }));
-    // this.props.socket.emit('fetchNLinked', JSON.stringify({
-    //   base: 'articles',
-    //   fields: ['titles', 'tags'],
-    //   min: 0,
-    //   max: '+inf',
-    //   offset: 0,
-    //   count: -1,
-    //   dontSendWholeSetOnUpdate: false,
-    //   myIdentifier: new Date()
-    // }));
-
-    let newDataItem = {
-      id: 7,
-      rank: 99, // or date
-      titles: 'A crime was committed',
-      tags: ['tag1', 'tag2']
-    };
-    // setTimeout(() => {
-    //   this.props.socket.emit('insert', JSON.stringify({
-    //     base: 'articles',
-    //     item: newDataItem,
-    //     dontNotifyUpdates: false
-    //   }));
-    // }, 5000);
   }
 
   render() {
