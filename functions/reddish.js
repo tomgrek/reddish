@@ -11,8 +11,15 @@
   let subscriptions = [];
 
   const listenerFunction = (a,b,c) => {
-    let key = b.slice(15);
+    let key = b.split(':')[1];
+    if (!listeners[key]) return;
+    if (c === 'zadd') return;
     for (let i = 0; i < listeners[key].sockets.length; i++) {
+    // room to optimize here -- don't transmit a newresult if the field
+    // (get it from b) is not in the activeQuery.fields
+    // also if the score of the new result is outside the query.min/max,
+    // also if the offset/count has already been met by what we sent (or
+    // do that bit on the client)
       let activeQuery = listeners[key].queries[i];
       let listeningSocket = listeners[key].sockets[i];
       if (activeQuery.dontSendWholeSetOnUpdate) {
@@ -24,7 +31,8 @@
             results: v,
             query: activeQuery,
             field: field,
-            timeStamp: new Date()
+            timeStamp: new Date(),
+            operation: 'update'
           });
         });
       } else {
@@ -108,21 +116,15 @@
               query: query,
               timeStamp: new Date()
             });
-            for (var i = 0; i < query.fields.length; i++) {
-              for (var j = 0; j < res.length; j++) {
-                let key = query.base + ':' + query.fields[i] + ':' + result[j].id;
-                if (listeners[key]) {
-                  listeners[key].sockets.push(socket);
-                  listeners[key].queries.push(query);
-                } else {
-                  redisdb.psubscribe("__keyspace@0__:" + query.base + "*");// + key);
-                  listeners[key] = {sockets: [socket], queries: [query]};
-
-                  if (_.find(subscriptions, (v) => v === query.base) === undefined) {
-                    redisdb.on('pmessage', listenerFunction);
-                    subscriptions.push(query.base);
-                  }
-                }
+            if (listeners[query.base]) {
+              listeners[query.base].sockets.push(socket);
+              listeners[query.base].queries.push(query);
+            } else {
+              redisdb.psubscribe("__keyspace@0__:" + query.base + "*");
+              listeners[query.base] = {sockets: [socket], queries: [query]};
+              if (_.find(subscriptions, (v) => v === query.base) === undefined) {
+                redisdb.on('pmessage', listenerFunction);
+                subscriptions.push(query.base);
               }
             }
           });
@@ -172,11 +174,9 @@
         //if (socket.request.user && !socket.request.user.logged_in) return;
         let fields = Object.keys(query.item);
         if (query.item.id === undefined || query.item.id === null) {
-          // nice looking id but not guaranteed unique
-          //query.item.id = (new Date()).getTime().toString(36);
           query.item.id = uuidv1();
         }
-        redisEngine.zadd([query.base, query.item.score, query.item.id], console.log);
+        redisEngine.zadd([query.base, query.item.score, query.item.id], ()=>{});
         for (var field of fields) {
           if (field === 'id') continue;
           redisEngine.set(query.base + ':' + field + ':' + query.item.id, JSON.stringify(query.item[field]));
@@ -185,11 +185,20 @@
         query.id = query.item.id;
         query.fields = fields;
         query.score = Number.parseInt(query.item.score);
-        query.operation = 'insert';
         delete query.item;
         fetchLinked(query).then(res => {
-          socket.emit('newresult', {results: res, query: query, timeStamp: new Date()});
+          for (let i = 0; i < listeners[query.base].sockets.length; i++) {
+            query.queryId = listeners[query.base].queries[i].queryId;
+            console.log('sending zadd to '+ query.queryId);
+            listeners[query.base].sockets[i].emit('newresult', {results: res, query: query, operation: 'insert', timeStamp: new Date()});
+          }
         });
+        for (let field of fields) {
+          listeners[ query.base + ':' + field + ':' + query.id] = {
+            sockets: Array.from(listeners[query.base].sockets),
+            queries: Array.from(listeners[query.base].queries)
+          };
+        }
       });
 
       socket.on('find', query => {
@@ -199,7 +208,7 @@
         // });
         redisEngine.hgetall(query, (err, d) => {
           socket.emit('results', d);
-          let sub = redisdb; //redis.createClient();
+          let sub = redisdb;
           sub.psubscribe("__keyspace@0__:" + query);
           sub.on('pmessage',(a,b,c) => {
             // b contains the modified key - optimize by transmitting only that

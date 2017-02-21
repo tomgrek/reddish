@@ -22,6 +22,10 @@ export default class Reddish {
   }
   link(component, fields, stateDataItemName, minScore = 0, maxScore = '+inf', offset = 0, count = -1) {
     this.ready = false;
+
+    //TODO: check offline status here, if so, load the data from localStorage instead
+    // and obv store the data in localstorage upon fetch.
+
     this._linkedComponent = component; // save ref to component for insert etc.
     this.socket.emit('fetchNLinked', {
       base: this.baseSchemaName,
@@ -34,10 +38,12 @@ export default class Reddish {
       queryId: this.uniqueQueryId
     });
     this.socket.on('newresult', (result) => {
+      console.log(result, result.query.base,result.query.queryId, this.uniqueQueryId);
       if (result.query.base !== this.baseSchemaName) return;
       if (result.query.queryId !== this.uniqueQueryId) return;
-      if (result.query.operation === 'insert') {
-        insertWithScore(result.results);
+      if (result.operation === 'insert') {
+        console.log('insert op');
+        this.insertWithScore(result.results);
       } else {
         this._cache.map(item => {
           if (item.id === result.results.id) {
