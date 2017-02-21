@@ -13,7 +13,7 @@
   const listenerFunction = (a,b,c) => {
     let key = b.split(':')[1];
     if (!listeners[key]) return;
-    if (c === 'zadd') return;
+    if (c === 'zadd' || c === 'zrem' || c === 'del') return;
     for (let i = 0; i < listeners[key].sockets.length; i++) {
     // room to optimize here -- don't transmit a newresult if the field
     // (get it from b) is not in the activeQuery.fields
@@ -133,7 +133,7 @@
       // this just gets a single item
       socket.on('fetchLinked', query => {
         fetchLinked(query).then(res => {
-          socket.emit('results', JSON.stringify({results: res, query: query, timeStamp: new Date()}));
+          socket.emit('results', {results: res, query: query, timeStamp: new Date()});
           let subs = [];
           for (var key of Object.keys(res)) {
             subs[key] = redisdb;
@@ -166,10 +166,34 @@
       });
 
       // STILL TODO:
-      // find and fetch (query keys articles.titles, then return fetched id)
-      // insert (done!), update, delete
+      // find (query keys articles.field, then return fetched id)
+      // update
       // NEXT: have server create
       // db schema with specified fields if it doesn't already exist.
+      // transmit sockets on different rooms depending on user
+
+      socket.on('delete', query => {
+        //if (socket.request.user && !socket.request.user.logged_in) return;
+        redisEngine.zrem([query.base, query.id], ()=>{});
+        for (var field of query.fields) {
+          redisEngine.del(query.base + ':' + field + ':' + query.id);
+        }
+        for (var i = 0; i < listeners[query.base].sockets.length; i++) {
+          query.queryId = listeners[query.base].queries[i].queryId;
+          if (listeners[query.base].queries[i].dontSendWholeSetOnUpdate) {
+            listeners[query.base].sockets[i].emit('newresult', {
+              operation: 'delete',
+              id: query.id,
+              query: query,
+              timeStamp: new Date()
+            });
+          } else {
+            // fetch the whole set and send it. not implemented yet! (TODO)
+          }
+        }
+        // next either send a delete newresult, or resend the whole set.
+      });
+
       socket.on('insert', query => {
         //if (socket.request.user && !socket.request.user.logged_in) return;
         let fields = Object.keys(query.item);
@@ -189,7 +213,9 @@
         fetchLinked(query).then(res => {
           for (let i = 0; i < listeners[query.base].sockets.length; i++) {
             query.queryId = listeners[query.base].queries[i].queryId;
-            console.log('sending zadd to '+ query.queryId);
+            // unfortunately, the way this is implemented now means that
+            // inserts to the db from other sources will NOT be notified to clients,
+            // except on a refresh :(
             listeners[query.base].sockets[i].emit('newresult', {results: res, query: query, operation: 'insert', timeStamp: new Date()});
           }
         });

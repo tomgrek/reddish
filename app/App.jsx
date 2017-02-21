@@ -10,13 +10,13 @@ import Reddish from './reddish.js';
 export default class App extends Component {
   state = {
     data: [{id:'1', content: 'An empty, default item'}],
-    todosList: new Reddish(this.props.socket, 'articles')
+    todosList: new Reddish(this.props.socket, 'testtodos')
   }
   constructor(props) {
     super(props);
   }
   componentDidMount() {
-    this.state.todosList.link(this, ['titles', 'tags'], 'data');
+    this.state.todosList.link(this, ['name'], 'data');
     //setTimeout(()=>this.props.socket.emit('find', "demo:data"),2000);
     //this.props.socket.emit('find', "articles");
   }
@@ -35,12 +35,12 @@ export default class App extends Component {
       marginBottom: '0.5em',
       padding: '0.5em 0.5em'
     };
-    const deleteClicked = (evt, id) => {
-      console.log(evt, id);
+    const deleteClicked = (id, evt) => {
+      this.state.todosList.delete(id, ['name']);
     }
     let todos = this.state.data.map(item => (
       <li style={itemStyle} key={item.id}>
-        {item.titles}
+        {item.name}
         <span style={{marginLeft: '2em'}} onClick={deleteClicked.bind(this, item.id)}><Link href="#">(delete)</Link></span>
         <span style={{marginLeft: '1em'}}><Link href="#">(edit)</Link></span>
       </li>
@@ -96,8 +96,8 @@ export default class App extends Component {
 
     const addItemClicked = (evt) => {
       this.state.todosList.insert({
-        titles: document.getElementById('itemToAdd').value,
-        tags: ['not','really']
+        name: document.getElementById('itemToAdd').value,
+        //tags: ['not','really']
       });
     };
 

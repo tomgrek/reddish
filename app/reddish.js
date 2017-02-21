@@ -38,18 +38,21 @@ export default class Reddish {
       queryId: this.uniqueQueryId
     });
     this.socket.on('newresult', (result) => {
-      console.log(result, result.query.base,result.query.queryId, this.uniqueQueryId);
+      //console.log(result, result.query.base,result.query.queryId, this.uniqueQueryId);
       if (result.query.base !== this.baseSchemaName) return;
       if (result.query.queryId !== this.uniqueQueryId) return;
       if (result.operation === 'insert') {
-        console.log('insert op');
         this.insertWithScore(result.results);
       } else {
-        this._cache.map(item => {
-          if (item.id === result.results.id) {
-            item[result.field] = result.results[result.field];
-          }
-        });
+        if (result.operation === 'delete') {
+          this._cache = this._cache.filter(item => item.id !== result.id);
+        } else {
+          this._cache.map(item => {
+            if (item.id === result.results.id) {
+              item[result.field] = result.results[result.field];
+            }
+          });
+        }
       }
       let stateChange = {};
       stateChange[stateDataItemName] = this._cache;
@@ -64,6 +67,17 @@ export default class Reddish {
       stateChange[stateDataItemName] = results.result;
       component.setState(stateChange);
       this._cache = Array.from(results.result);
+    });
+  }
+  // delete requires fields. TODO: Store these fields by letting the user
+  // create a schema, so they don't need to type them out each time
+  delete(id, fields) {
+    this.socket.emit('delete', {
+      base: this.baseSchemaName,
+      fields: fields,
+      queryId: this.uniqueQueryId,
+      id: id,
+      dontSendWholeSetOnUpdate: true
     });
   }
   insert(item, score = (new Date()).getTime(), id) {
